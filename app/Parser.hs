@@ -23,7 +23,7 @@ parens :: Monad m => ParsecT String () m a -> ParsecT String () m a
 parens = between (char '(') (char ')')
 
 parseTy :: Monad m => ParsecT String () m Ty
-parseTy = parseTyConst <|> parens parseTyConst `chainl1` parseTyArr
+parseTy = (parseTyConst <|> parens parseTy) `chainl1` parseTyArr
 
 -- Term parser
 parseVar :: Monad m => ParsecT String () m Term
@@ -54,4 +54,4 @@ parseApp = do
   return App
 
 parseTerm :: Monad m => ParsecT String () m Term
-parseTerm = parseVar <|> parseLam <|> parens parseTerm `chainl1` parseApp
+parseTerm = (parseVar <|> parseLam <|> parens parseTerm) `chainl1` parseApp
