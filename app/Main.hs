@@ -5,7 +5,13 @@ module Main where
 import Control.Monad.Except (MonadError (throwError), runExcept)
 import Control.Monad.Reader
 import Control.Monad.Writer
-import Types
+import Ctx -- Typing contexts
+-- Terms
+-- Types
+import Parser
+import Term
+import Text.Parsec
+import Ty
 
 typecheck :: (MonadReader Ctx m, MonadError String m, MonadWriter [(Term, Ty)] m) => Term -> m Ty
 typecheck term = do
@@ -34,24 +40,28 @@ identityFn :: Term
 identityFn = Lam "w" (TyConst "X") (App (Lam "x" (TyConst "X") (Var "x")) (Var "w"))
 
 main :: IO ()
-main =
-  let result = runExcept $ runWriterT $ runReaderT (typecheck identityFn) ctxNew
-   in case result of
-        Left err -> putStrLn err
-        Right (_, log) -> do
-          let terms = map fst log
-           in let types = map snd log
-               in let termStrs = map show terms
-                   in let typeStrs = map show types
-                       in let longestTermStr = maximum $ map length termStrs
-                           in let longestTypeStr = maximum $ map length typeStrs
-                               in do
-                                    let header = lpad longestTermStr ' ' "Terms" ++ "    " ++ "Types"
-                                     in do
-                                          putStrLn header
-                                          putStrLn $ replicate (length header) '-'
-                                          forM_ (zip termStrs typeStrs) $ \(te, ty) -> do
-                                            putStrLn $ lpad longestTermStr ' ' te ++ "    " ++ ty
+main = do
+  s <- getLine
+  parseTermResult <- runParserT parseTerm () "" s
+  case parseTermResult of
+    Left err -> print err
+    Right term ->
+      let result = runExcept $ runWriterT $ runReaderT (typecheck term) ctxNew
+       in case result of
+            Left err -> putStrLn err
+            Right (_, log) -> do
+              let terms = map fst log
+               in let types = map snd log
+                   in let termStrs = map show terms
+                       in let typeStrs = map show types
+                           in let longestTermStr = maximum $ map length termStrs
+                               in let longestTypeStr = maximum $ map length typeStrs
+                                   in let header = lpad longestTermStr ' ' "Terms" ++ "    " ++ "Types"
+                                       in do
+                                            putStrLn header
+                                            putStrLn $ replicate (length header) '-'
+                                            forM_ (zip termStrs typeStrs) $ \(te, ty) -> do
+                                              putStrLn $ lpad longestTermStr ' ' te ++ "    " ++ ty
 
 lpad :: Int -> Char -> String -> [Char]
 lpad padding padder string = string ++ replicate (padding - length string) padder
