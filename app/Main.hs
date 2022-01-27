@@ -4,10 +4,14 @@ module Main where
 
 import Control.Monad.Except (MonadError (throwError), runExcept)
 import Control.Monad.Reader
-import Control.Monad.Writer
-import Ctx -- Typing contexts
+-- Typing contexts
 -- Terms
 -- Types
+
+import Control.Monad.State
+import Control.Monad.Writer
+import Ctx
+import Data.List
 import Parser
 import Term
 import Text.Parsec
@@ -39,14 +43,32 @@ typecheck term = do
 identityFn :: Term
 identityFn = Lam "w" (TyConst "X") (App (Lam "x" (TyConst "X") (Var "x")) (Var "w"))
 
+freeVariables :: Term -> [String]
+freeVariables term =
+  case term of
+    Var name -> [name]
+    Lam name ty body -> freeVariables body \\ [name]
+    App fun arg -> freeVariables fun ++ freeVariables arg
+
+close :: Monad m => Term -> StateT Int m Term
+close term = do
+  let fvs = freeVariables term
+  typeVars <- forM fvs $ \fv -> do
+    i <- get
+    modify (+ 1)
+    return $ TyConst $ show i ++ "_" ++ fv
+  let abstractions = Lam <$> fvs <*> typeVars
+  return $ foldl (flip ($)) term abstractions
+
 main :: IO ()
 main = do
   s <- getLine
   parseTermResult <- runParserT parseTerm () "" s
   case parseTermResult of
     Left err -> print err
-    Right term ->
-      let result = runExcept $ runWriterT $ runReaderT (typecheck term) ctxNew
+    Right term -> do
+      let closedTerm = evalState (close term) 0
+      let result = runExcept $ runWriterT $ runReaderT (typecheck closedTerm) ctxNew
        in case result of
             Left err -> putStrLn err
             Right (_, log) -> do
